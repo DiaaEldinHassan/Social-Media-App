@@ -1,0 +1,3 @@
+dist
+src/config/.env.dev
+node_modules
