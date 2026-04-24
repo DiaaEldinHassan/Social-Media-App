@@ -1,4 +1,4 @@
-# Social Media App (Week 18)
+# Social Media App 
 
 Full-stack authentication and user profile project using:
 
