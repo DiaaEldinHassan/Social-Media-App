@@ -2,6 +2,7 @@ import { env } from "../../config/env.config";
 
 import { v2 as cloudinary } from "cloudinary";
 import { uniqueNameGenerator } from "../utils/uniqueName.utils";
+import { BadRequestError } from "../utils/error.utils";
 
 class CloudinaryService {
   async uploadImage(filePath: string, userId: string): Promise<string> {
@@ -13,7 +14,7 @@ class CloudinaryService {
       return result.secure_url;
     } catch (error) {
       console.error("Cloudinary upload error:", error);
-      throw new Error("Failed to upload image to Cloudinary");
+      throw new BadRequestError("Failed to upload image to Cloudinary");
     }
   }
 

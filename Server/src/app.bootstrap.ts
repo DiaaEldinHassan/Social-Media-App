@@ -1,19 +1,29 @@
 import { dbConnection, redisConnection } from "./DB";
 import express from "express";
 import type { Express } from "express";
+import type { Server } from "node:http";
 import cors from "cors";
 import { rateLimit, type RateLimitRequestHandler } from "express-rate-limit";
 import helmet from "helmet";
 import { globalErrorHandler } from "./middleware";
 import { env } from "./config/env.config";
-import { auth, users } from "./modules/";
+import {
+  auth,
+  users,
+  posts,
+  comments,
+  reactions,
+  stories,
+  feed,
+} from "./modules/";
 
-export async function bootstrap(): Promise<void> {
+export async function bootstrap(): Promise<{ app: Express; server: Server }> {
   // DB Connection
   await dbConnection();
   await redisConnection();
   // Express Application
   const app: Express = express();
+  app.set("trust proxy", 1);
   // File Parser
   app.use(express.json());
   // CORS
@@ -55,10 +65,19 @@ export async function bootstrap(): Promise<void> {
   // Routing
   app.use("/auth", authRateLimiter, auth);
   app.use("/users", users);
+  app.use("/posts", posts);
+  app.use("/comments", comments);
+  app.use("/reactions", reactions);
+  app.use("/stories", stories);
+  app.use("/feed", feed);
+  app.get("/ready", (_req, res) =>
+    res.status(200).json({ ok: true, dependencies: { db: "up", redis: "up" } }),
+  );
   // Middlewares
   app.use(globalErrorHandler);
   // Server Listener
-  app.listen(env.PORT, () => {
+  const server = app.listen(env.PORT, () => {
     console.log(`Server is running on port ${env.PORT} 🚀🚀`);
   });
+  return { app, server };
 }

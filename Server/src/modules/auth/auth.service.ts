@@ -1,25 +1,32 @@
 import {
-  userData,
+  IUser,
   userService,
   compareHash,
   generateToken,
   encrypt,
-  userDataToken,
+  IUserToken,
   googleAuth,
   Provider,
 } from "../../common";
 import { redisService } from "../../common/services/redis.service";
+import {
+  AppError,
+  BadRequestError,
+  ConflictError,
+  NotFoundError,
+  UnauthorizedError,
+} from "../../common/utils/error.utils";
 import { dispatchSignUpOtp } from "../../common/events/otp.event";
 import { User } from "../../DB/models/users.model";
 
 class Auth {
   constructor() {}
-  async signUp(userData: userData) {
+  async signUp(userData: IUser) {
     try {
       const normalizedEmail = userData.email.trim().toLowerCase();
       const user = await userService.findByEmail(normalizedEmail);
       if (user) {
-        throw new Error("User already exists");
+        throw new ConflictError("User already exists");
       }
       const encryptedPhone =
         userData.phone?.map((phone) => encrypt(phone)) ?? [];
@@ -40,7 +47,7 @@ class Auth {
         await User.deleteOne({ email: normalizedEmail });
         const reason =
           otpError instanceof Error ? otpError.message : String(otpError);
-        throw new Error(
+        throw new BadRequestError(
           `Account could not be verified: ${reason}. Fix email or Redis configuration and try again.`,
         );
       }
@@ -48,16 +55,17 @@ class Auth {
     } catch (error) {
       console.error("Sign Up failed:", error);
       const message = error instanceof Error ? error.message : "Sign Up Error";
-      throw new Error(message);
+      if (error instanceof AppError) throw error;
+      throw new BadRequestError(message);
     }
   }
-  async signIn(userData: userData | userDataToken): Promise<any> {
+  async signIn(userData: IUser | IUserToken): Promise<any> {
     try {
       if ("token" in userData) {
         const payload = await googleAuth(userData.token);
         const email = payload?.email;
         if (!email) {
-          throw new Error("Invalid Google token");
+          throw new UnauthorizedError("Invalid Google token");
         }
 
         let user = await userService.findByEmail(email);
@@ -75,9 +83,10 @@ class Auth {
         }
         const token = generateToken({
           userId: user._id,
-          username:payload.name,
+          username: payload.name,
           role: user.role,
           confirmed: user.confirmed,
+          profilePicture: user.profilePicture
         });
         await redisService.storeToken(
           token.accessToken,
@@ -89,20 +98,21 @@ class Auth {
 
       const user = await userService.findByEmail(userData.email);
       if (!user) {
-        throw new Error("User not found");
+        throw new NotFoundError("User");
       }
       const isPasswordValid = await compareHash(
         userData.password,
         user.password,
       );
       if (!isPasswordValid) {
-        throw new Error("Invalid password");
+        throw new UnauthorizedError("Invalid password");
       }
       const token = generateToken({
         userId: user._id,
-        name:user.username,
+        name: user.username,
         role: user.role,
         confirmed: user.confirmed,
+        profilePicture: user.profilePicture
       });
       await redisService.storeToken(
         token.accessToken,
@@ -113,7 +123,8 @@ class Auth {
     } catch (error) {
       console.error("Sign In failed:", error);
       const message = error instanceof Error ? error.message : "Sign In Error";
-      throw new Error(message);
+      if (error instanceof AppError) throw error;
+      throw new BadRequestError(message);
     }
   }
 
@@ -124,7 +135,8 @@ class Auth {
     } catch (error) {
       console.error("Logout failed:", error);
       const message = error instanceof Error ? error.message : "Logout Error";
-      throw new Error(message);
+      if (error instanceof AppError) throw error;
+      throw new BadRequestError(message);
     }
   }
 
@@ -135,7 +147,8 @@ class Auth {
       console.error("Logout all failed:", error);
       const message =
         error instanceof Error ? error.message : "Logout All Error";
-      throw new Error(message);
+      if (error instanceof AppError) throw error;
+      throw new BadRequestError(message);
     }
   }
 
@@ -144,27 +157,35 @@ class Auth {
       const normalizedEmail = email.trim().toLowerCase();
       const user = await userService.findByEmail(normalizedEmail);
       if (!user) {
-        throw new Error("User not found");
+        throw new NotFoundError("User");
       }
-      const { dispatchForgetPasswordOtp } = await import("../../common/events/otp.event");
+      const { dispatchForgetPasswordOtp } =
+        await import("../../common/events/otp.event");
       await dispatchForgetPasswordOtp(normalizedEmail);
     } catch (error) {
       console.error("Forget password failed:", error);
-      throw new Error(error instanceof Error ? error.message : "Forget Password Error");
+      const message =
+        error instanceof Error ? error.message : "Forget Password Error";
+      if (error instanceof AppError) throw error;
+      throw new BadRequestError(message);
     }
   }
 
-  async resetPassword(email: string, otp: string, newPassword: string): Promise<void> {
+  async resetPassword(
+    email: string,
+    otp: string,
+    newPassword: string,
+  ): Promise<void> {
     try {
       const normalizedEmail = email.trim().toLowerCase();
       const storedOtp = await redisService.getOtp(normalizedEmail);
       if (!storedOtp || storedOtp !== otp) {
-        throw new Error("Invalid or expired OTP");
+        throw new BadRequestError("Invalid or expired OTP");
       }
 
       const user = await User.findOne({ email: normalizedEmail });
       if (!user) {
-        throw new Error("User not found");
+        throw new NotFoundError("User");
       }
 
       user.password = newPassword;
@@ -172,27 +193,37 @@ class Auth {
       await redisService.deleteOtp(normalizedEmail);
     } catch (error) {
       console.error("Reset password failed:", error);
-      throw new Error(error instanceof Error ? error.message : "Reset Password Error");
+      const message =
+        error instanceof Error ? error.message : "Reset Password Error";
+      if (error instanceof AppError) throw error;
+      throw new BadRequestError(message);
     }
   }
 
-  async updatePassword(userId: string, oldPassword: string, newPassword: string): Promise<void> {
+  async updatePassword(
+    userId: string,
+    oldPassword: string,
+    newPassword: string,
+  ): Promise<void> {
     try {
       const user = await User.findById(userId);
       if (!user) {
-        throw new Error("User not found");
+        throw new NotFoundError("User");
       }
 
       const isPasswordValid = await compareHash(oldPassword, user.password);
       if (!isPasswordValid) {
-        throw new Error("Invalid current password");
+        throw new UnauthorizedError("Invalid current password");
       }
 
       user.password = newPassword;
       await user.save();
     } catch (error) {
       console.error("Update password failed:", error);
-      throw new Error(error instanceof Error ? error.message : "Update Password Error");
+      const message =
+        error instanceof Error ? error.message : "Update Password Error";
+      if (error instanceof AppError) throw error;
+      throw new BadRequestError(message);
     }
   }
 }

@@ -10,3 +10,7 @@ export const dbConnection = async (): Promise<void> => {
         process.exit(1);
     }
 };
+
+export const closeDbConnection = async (): Promise<void> => {
+  await mongoose.connection.close();
+};

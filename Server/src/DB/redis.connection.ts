@@ -16,3 +16,10 @@ export const redisConnection = async (): Promise<void> => {
 };
 
 export const getRedisClient = () => redisClientInstance;
+
+export const closeRedisConnection = async (): Promise<void> => {
+  if (redisClientInstance) {
+    await redisClientInstance.quit();
+    redisClientInstance = null;
+  }
+};

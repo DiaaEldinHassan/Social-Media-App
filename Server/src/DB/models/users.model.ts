@@ -1,5 +1,9 @@
 import mongoose from "mongoose";
 import { Provider, Role, hashing } from "../../common";
+import { Post } from "./posts.model";
+import { Comment } from "./comments.model";
+import { Story } from "./stories.model";
+import { applySoftDeleteQueryMiddleware } from "./softDelete.utils";
 
 const userPhoneSchema = new mongoose.Schema({
   encryptedPhoneNumber: {
@@ -52,6 +56,24 @@ const userSchema = new mongoose.Schema(
       default: Role.USER as string,
       enum: [Role.USER, Role.ADMIN, Role.MODERATOR, Role.SUPER_ADMIN],
     },
+    fcmTokens: {
+      type: [String],
+      default: [],
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   { timestamps: true, optimisticConcurrency: true, collection: "User" },
 );
@@ -59,6 +81,29 @@ const userSchema = new mongoose.Schema(
 userSchema.pre("save", async function () {
   if (!this.isModified("password")) return;
   this.password = await hashing(this.password);
+});
+
+applySoftDeleteQueryMiddleware(userSchema);
+
+const deleteUserRelations = async (userId: mongoose.Types.ObjectId): Promise<void> => {
+  await Promise.all([
+    Post.deleteMany({ createdBy: userId }),
+    Comment.deleteMany({ createdBy: userId }),
+    Post.updateMany({}, { $pull: { reactions: { userId } } }),
+    Comment.updateMany({}, { $pull: { reactions: { userId } } }),
+    Story.deleteMany({ createdBy: userId }),
+  ]);
+};
+
+userSchema.pre("deleteOne", { document: true, query: false }, async function () {
+  await deleteUserRelations(this._id);
+});
+
+userSchema.pre("findOneAndDelete", async function () {
+  const user = await this.model.findOne(this.getFilter()).select("_id");
+  if (user?._id) {
+    await deleteUserRelations(user._id);
+  }
 });
 
 export const User = mongoose.model("User", userSchema);

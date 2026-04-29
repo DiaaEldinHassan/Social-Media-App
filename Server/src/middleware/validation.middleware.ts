@@ -5,11 +5,14 @@ export const validate =
   (schema: ZodType) =>
   async (req: Request, res: Response, next: NextFunction): Promise<any> => {
     try {
+
       await schema.parseAsync({
-        ...req.body,
+        body: req.body,
         file: req.file, 
+        params: req.params,
+        query: req.query
       });
-      
+
       next();
     } catch (error: any) {
       return res.status(400).json({

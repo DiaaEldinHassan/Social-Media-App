@@ -1,4 +1,5 @@
 import { getRedisClient } from "../../DB/redis.connection";
+import { BadRequestError } from "../utils/error.utils";
 
 type RedisClient = NonNullable<ReturnType<typeof getRedisClient>>;
 
@@ -6,7 +7,7 @@ class RedisService {
   private requireClient(): RedisClient {
     const client = getRedisClient();
     if (!client) {
-      throw new Error("Redis client not initialized");
+      throw new BadRequestError("Redis client not initialized");
     }
     return client;
   }

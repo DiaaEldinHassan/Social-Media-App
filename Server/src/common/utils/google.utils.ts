@@ -1,5 +1,6 @@
 import { OAuth2Client } from "google-auth-library";
 import { env } from "../../config/env.config";
+import { UnauthorizedError } from "./error.utils";
 
 const googleClient = new OAuth2Client({
   clientId: env.GOOGLE_CLIENT_ID!,
@@ -12,11 +13,11 @@ export const googleAuth = async (token: string): Promise<any> => {
       audience: env.GOOGLE_CLIENT_ID!,
     });
     if (!ticket) {
-      throw new Error("Google Auth Error");
+      throw new UnauthorizedError("Google Auth Error");
     }
     const payload = ticket.getPayload();
     return payload;
   } catch (error) {
-    throw new Error("Google Auth Error");
+    throw new UnauthorizedError("Google Auth Error");
   }
 };

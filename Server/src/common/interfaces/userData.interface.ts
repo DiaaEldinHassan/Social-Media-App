@@ -1,6 +1,8 @@
+import { ObjectId } from "mongoose";
 import { Provider, Role } from "../enums";
 
-export interface userData {
+export interface IUser {
+  userId: ObjectId;
   username: string;
   email: string;
   phone?: string[];
@@ -11,6 +13,6 @@ export interface userData {
   role: Role.ADMIN | Role.MODERATOR | Role.SUPER_ADMIN | Role.USER;
 }
 
-export interface userDataToken {
+export interface IUserToken {
   token: string;
 }

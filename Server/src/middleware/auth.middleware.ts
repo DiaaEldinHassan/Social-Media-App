@@ -30,8 +30,8 @@ export const authMiddleware =
       try {
         decodedToken = verifyToken(token);
       } catch (err) {
-        console.error(`[AUTH] Token verification failed for: "${token}"`);
-        console.error(`[AUTH] Error:`, err);
+        console.error("[AUTH] Token verification failed");
+        console.error("[AUTH] Error:", err);
         throw err;
       }
 
