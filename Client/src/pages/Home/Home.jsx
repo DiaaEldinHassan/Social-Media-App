@@ -89,9 +89,15 @@ const Home = () => {
         )}
 
         {token && (
-          <div style={{ marginTop: "2rem" }}>
-            <Link to="/profile">
-              <Button>View Profile</Button>
+          <div style={{ marginTop: "2rem", display: "flex", flexDirection: "column", gap: "0.75rem", alignItems: "center" }}>
+            <Link to="/profile" style={{ width: "100%", maxWidth: "300px" }}>
+              <Button fullWidth>View Profile</Button>
+            </Link>
+            <Link to="/chat" style={{ width: "100%", maxWidth: "300px" }}>
+              <Button variant="outline" fullWidth>Messages</Button>
+            </Link>
+            <Link to="/feed" style={{ width: "100%", maxWidth: "300px" }}>
+              <Button variant="outline" fullWidth>Feed</Button>
             </Link>
           </div>
         )}

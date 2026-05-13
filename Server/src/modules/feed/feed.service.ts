@@ -1,9 +1,19 @@
 import { Post } from "../../DB/models/posts.model";
 import { Comment } from "../../DB/models/comments.model";
+import { User } from "../../DB/models/users.model";
 
 class FeedService {
-  async getFeed(page = 1, limit = 20) {
-    const posts = await Post.find()
+  async getFeed(userId?: string, page = 1, limit = 20) {
+    let filter: any = {};
+
+    if (userId) {
+      const user = await User.findById(userId).select("friends");
+      const friendIds = (user?.friends || []).map((f: any) => f.friendId);
+      friendIds.push(userId as any);
+      filter.createdBy = { $in: friendIds };
+    }
+
+    const posts = await Post.find(filter)
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)

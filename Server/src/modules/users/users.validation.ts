@@ -48,3 +48,15 @@ export const registerFcmTokenSchema = z.object({
     token: z.string().min(10, "Invalid FCM token"),
   }),
 });
+
+export const searchSchema= z.object({
+  body:z.object({
+    searchString:z.string().min(1,"Please Enter at least one Character")
+  })
+})
+
+export const addFriendSchema= z.object({
+  params:z.object({
+    friendId:z.string().length(24,"Invalid User ID")
+  })
+})

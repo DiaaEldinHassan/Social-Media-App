@@ -14,6 +14,8 @@ import {
   videoSchema,
   userIdParamSchema,
   registerFcmTokenSchema,
+  searchSchema,
+  addFriendSchema,
 } from "./users.validation";
 
 import { promisify } from "node:util";
@@ -52,6 +54,26 @@ router.get(
     }
   },
 );
+
+router.get("/my-friends",authMiddleware(),async (req:Request,res:Response,next:NextFunction) => {
+  try {
+    const userId=(req as any).user.userId;
+    const friends = await usersService.myFriends(userId);
+    res.status(200).json({message:"Friends retrieved successfully",friends});
+  } catch (error) {
+    next(error);
+  }
+})
+
+router.get("/pending-requests",authMiddleware(),async (req:Request,res:Response,next:NextFunction) => {
+  try {
+    const userId=(req as any).user.userId;
+    const requests = await usersService.getPendingRequests(userId);
+    res.status(200).json({message:"Pending requests retrieved",requests});
+  } catch (error) {
+    next(error);
+  }
+})
 
 router.get(
   "/:userId",
@@ -239,3 +261,37 @@ router.get(
     }
   },
 );
+
+router.post("/search-user",authMiddleware(),validate(searchSchema),async (req:Request,res:Response,next:NextFunction) => {
+  try {
+     const response= await usersService.search(req.body.searchString);
+     console.log(response)
+      res.status(200).json(response);
+  } catch (error) {
+    next(error);
+  }
+} )
+
+router.post("/add-friend/:friendId",authMiddleware(),validate(addFriendSchema),async (req:Request,res:Response,next:NextFunction) => {
+  try {
+    const params=(req as any).params.friendId;
+    const user= (req as any).user.userId;
+    console.log(user)
+     const response= await usersService.addFriend(params,user);
+     console.log(response)
+      res.status(200).json(response);
+  } catch (error) {
+    next(error);
+  }
+})
+
+router.post("/accept-friend/:friendId",authMiddleware(),validate(addFriendSchema),async (req:Request,res:Response,next:NextFunction) => {
+  try {
+    const friendId=(req as any).params.friendId;
+    const userId= (req as any).user.userId;
+     const response= await usersService.approveFriend(userId,friendId);
+      res.status(200).json(response);
+  } catch (error) {
+    next(error);
+  }
+})

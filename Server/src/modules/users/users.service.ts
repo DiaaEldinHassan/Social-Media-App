@@ -3,7 +3,7 @@ import { Post } from "../../DB/models/posts.model";
 import { Comment } from "../../DB/models/comments.model";
 import { Story } from "../../DB/models/stories.model";
 import { redisService } from "../../common/services/redis.service";
-import { IUser, s3Service } from "../../common";
+import { IUser, s3Service, userService } from "../../common";
 import { S3Service } from "../../common";
 import {
   AppError,
@@ -174,7 +174,7 @@ class UsersService {
       if (!user) {
         throw new NotFoundError("User");
       }
-        await User.findByIdAndUpdate(userId, { profilePicture: "" });
+      await User.findByIdAndUpdate(userId, { profilePicture: "" });
       return { message: "File deleted successfully" };
     } catch (error) {
       console.error("Delete User File Error:", error);
@@ -203,6 +203,152 @@ class UsersService {
       .populate("createdBy", "username email profilePicture");
   }
 
+  async search(searchStr: string) {
+    try {
+      const searchRegex = new RegExp(searchStr, "i");
+      const filter = {
+        $or: [
+          { username: { $regex: searchRegex } },
+          { email: { $regex: searchRegex } },
+        ],
+        isDeleted: false,
+      };
+      const response = await userService.findAll(
+        filter,
+        "username email profilePicture bio",
+      );
+      return response;
+    } catch (error) {
+      throw new BadRequestError();
+    }
+  }
+
+  async addFriend(friendId: string, userId: string) {
+    try {
+      if (friendId === userId) {
+        throw new BadRequestError("Cannot add yourself as a friend");
+      }
+
+      const friend = await userService.findById(
+        friendId,
+        "_id username email profilePicture bio",
+      );
+      if (!friend) {
+        throw new NotFoundError("There is No user with that ID");
+      }
+
+      const existing = await User.findOne({
+        _id: userId,
+        $or: [
+          { "friends.friendId": friendId },
+          { "pendingList.friendId": friendId },
+        ],
+      });
+      if (existing) {
+        throw new BadRequestError("Friend request already sent or user is already a friend");
+      }
+
+      await userService.findByAndUpdate(
+        { _id: friendId },
+        {
+          $push: {
+            pendingList: {
+              friendId: userId,
+              addedAt: new Date(),
+              status: "pending",
+              sentBy: userId,
+            },
+          },
+        },
+      );
+      await userService.findByAndUpdate(
+        { _id: userId },
+        {
+          $push: {
+            pendingList: {
+              friendId,
+              status: "pending",
+              addedAt: new Date(),
+              sentBy: userId,
+            },
+          },
+        },
+      );
+      return { message: "Friend request sent", statusCode: 201 };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new BadRequestError();
+    }
+  }
+
+  async approveFriend(userId: string, friendId: string) {
+    try {
+      const user = await userService.findByAndUpdate(
+        { _id: userId, "pendingList.sentBy": friendId },
+        {
+          $pull: { pendingList: { sentBy: friendId } },
+          $push: {
+            friends: {
+              friendId,
+              status: "accepted",
+              addedAt: new Date(),
+            },
+          },
+        },
+      );
+      if (!user) {
+        throw new NotFoundError("No pending friend request from this user");
+      }
+
+      await userService.findByAndUpdate(
+        { _id: friendId },
+        {
+          $pull: { pendingList: { friendId: userId } },
+          $push: {
+            friends: {
+              friendId: userId,
+              status: "accepted",
+              addedAt: new Date(),
+            },
+          },
+        },
+      );
+      return { message: "Friend request accepted", statusCode: 201 };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new BadRequestError();
+    }
+  }
+
+  async myFriends(userId: string) {
+    try {
+      const user = await User.findById(userId)
+        .select("friends")
+        .populate("friends.friendId", "username email profilePicture");
+      if (!user) throw new NotFoundError("User");
+      return user.friends || [];
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new BadRequestError();
+    }
+  }
+
+  async getPendingRequests(userId: string) {
+    try {
+      const user = await User.findById(userId)
+        .select("pendingList")
+        .populate("pendingList.friendId", "username email profilePicture");
+      if (!user) throw new NotFoundError("User");
+      const incoming = (user.pendingList || []).filter(
+        (p: any) => String(p.sentBy) !== userId,
+      );
+      return incoming;
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new BadRequestError();
+    }
+  }
+
   async deleteMyAccount(userId: string) {
     const user = await User.findById(userId);
     if (!user) throw new NotFoundError("User");
@@ -211,9 +357,18 @@ class UsersService {
     user.deletedBy = userId as any;
     await user.save();
     await Promise.all([
-      Post.updateMany({ createdBy: userId }, { isDeleted: true, deletedAt: new Date(), deletedBy: userId }),
-      Comment.updateMany({ createdBy: userId }, { isDeleted: true, deletedAt: new Date(), deletedBy: userId }),
-      Story.updateMany({ createdBy: userId }, { isDeleted: true, deletedAt: new Date(), deletedBy: userId }),
+      Post.updateMany(
+        { createdBy: userId },
+        { isDeleted: true, deletedAt: new Date(), deletedBy: userId },
+      ),
+      Comment.updateMany(
+        { createdBy: userId },
+        { isDeleted: true, deletedAt: new Date(), deletedBy: userId },
+      ),
+      Story.updateMany(
+        { createdBy: userId },
+        { isDeleted: true, deletedAt: new Date(), deletedBy: userId },
+      ),
       Post.updateMany({}, { $pull: { reactions: { userId } } }),
       Comment.updateMany({}, { $pull: { reactions: { userId } } }),
     ]);
@@ -221,7 +376,9 @@ class UsersService {
   }
 
   async restoreMyAccount(userId: string) {
-    const user = await User.findById(userId, null, { withDeleted: true } as any);
+    const user = await User.findById(userId, null, {
+      withDeleted: true,
+    } as any);
     if (!user) throw new NotFoundError("User");
     await User.findByIdAndUpdate(userId, {
       isDeleted: false,
@@ -232,7 +389,9 @@ class UsersService {
   }
 
   async hardDeleteMyAccount(userId: string) {
-    const user = await User.findById(userId, null, { withDeleted: true } as any);
+    const user = await User.findById(userId, null, {
+      withDeleted: true,
+    } as any);
     if (!user) throw new NotFoundError("User");
     await User.findByIdAndDelete(userId);
     await redisService.revokeAllUserTokens(userId);

@@ -4,7 +4,7 @@ export abstract class AppError extends Error {
 
   constructor(message: string, statusCode: number, isOperational = true) {
     super(message);
-    Object.setPrototypeOf(this, new.target.prototype); // Restore prototype chain
+    Object.setPrototypeOf(this, new.target.prototype); 
     this.statusCode = statusCode;
     this.isOperational = isOperational;
     Error.captureStackTrace(this, this.constructor);

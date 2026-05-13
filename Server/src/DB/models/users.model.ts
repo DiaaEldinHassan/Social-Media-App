@@ -16,6 +16,44 @@ const userPhoneSchema = new mongoose.Schema({
   },
 });
 
+const friendsSchema = new mongoose.Schema({
+  friendId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User", 
+    required: true,
+  },
+  status: {
+    type: String,
+    enum: ["pending", "accepted"],
+    default: "accepted",
+  },
+  addedAt: {
+    type: Date,
+    default: Date.now,
+  }
+}, { _id: false });
+
+const pendingListSchema=new mongoose.Schema({
+  friendId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User", 
+    required: true,
+  },
+  status: {
+    type: String,
+    enum: ["pending", "accepted"],
+    default: "accepted",
+  },
+  sentBy:{
+    type: mongoose.Schema.Types.ObjectId,
+    required:true
+  },
+  addedAt: {
+    type: Date,
+    default: Date.now,
+  }
+}, { _id: false });
+
 const userSchema = new mongoose.Schema(
   {
     username: {
@@ -56,6 +94,8 @@ const userSchema = new mongoose.Schema(
       default: Role.USER as string,
       enum: [Role.USER, Role.ADMIN, Role.MODERATOR, Role.SUPER_ADMIN],
     },
+    friends:[friendsSchema],
+    pendingList:[pendingListSchema],
     fcmTokens: {
       type: [String],
       default: [],

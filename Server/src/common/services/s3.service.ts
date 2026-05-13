@@ -3,6 +3,7 @@ import {
   GetObjectCommand,
   GetObjectCommandOutput,
   ObjectCannedACL,
+  PutBucketPolicyCommand,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -30,7 +31,7 @@ export class S3Service {
     storage = storageApproach.memory,
     file,
     Bucket = env.AWS_S3_BUCKET_NAME,
-    ACL = ObjectCannedACL.private,
+    ACL = ObjectCannedACL.public_read,
     ContentType,
     path = "general",
     fileName,
@@ -67,7 +68,7 @@ export class S3Service {
     storage = storageApproach.disk,
     file,
     Bucket = env.AWS_S3_BUCKET_NAME,
-    ACL = ObjectCannedACL.private,
+    ACL = ObjectCannedACL.public_read,
     ContentType,
     path = "general",
   }: {
@@ -152,5 +153,37 @@ export class S3Service {
     const result = await this.client.send(command);
     console.log(`S3 deleteFile completed for key: ${Key}`, result);
   }
+  async ensureBucketPublicRead   () {
+    try {
+      const policy = {
+        Version: "2012-10-17",
+        Statement: [
+          {
+            Sid: "PublicReadGetObject",
+            Effect: "Allow",
+            Principal: "*",
+            Action: "s3:GetObject",
+            Resource: `arn:aws:s3:::${env.AWS_S3_BUCKET_NAME}/*`,
+          },
+        ],
+      };
+  
+      const command = new PutBucketPolicyCommand({
+        Bucket: env.AWS_S3_BUCKET_NAME,
+        Policy: JSON.stringify(policy),
+      });
+  
+      await this.client.send(command);
+      console.log("✅ S3 bucket public-read policy applied");
+    } catch (error: any) {
+      if (error.name === "MalformedPolicy" || error.name === "AccessDenied") {
+        console.warn("⚠️  Cannot set S3 bucket policy — you may need to set it manually in AWS Console:");
+        console.warn(`   Bucket: ${env.AWS_S3_BUCKET_NAME}`);
+        console.warn("   Policy: { Version: '2012-10-17', Statement: [{ Sid: 'PublicReadGetObject', Effect: 'Allow', Principal: '*', Action: 's3:GetObject', Resource: 'arn:aws:s3:::<bucket>/*' }] }");
+      } else {
+        console.warn(`⚠️  S3 bucket policy error: ${error.message}`);
+      }
+    }
+  };
 }
 export const s3Service = new S3Service();
